@@ -44,7 +44,7 @@ def notes_create():
             db.session.execute(db.select(models.Tag).where(models.Tag.name == tag_name))
             .scalars()
             .first()
-        )
+            )
 
         if not tag:
             tag = models.Tag(name=tag_name)
@@ -56,7 +56,6 @@ def notes_create():
     db.session.commit()
 
     return flask.redirect(flask.url_for("index"))
-
 
 @app.route("/tags/<tag_name>")
 def tags_view(tag_name):
@@ -80,22 +79,50 @@ def tags_view(tag_name):
 @app.route("/notes/<int:note_id>/edit", methods=["GET", "POST"])
 def notes_edit(note_id):
     db = models.db
-    note = db.session.get(models.Note, note_id)
-    
+
+    # Fetch the note from the database
+    note = db.session.execute(
+        db.select(models.Note).where(models.Note.id == note_id)
+    ).scalars().first()
+
     if not note:
-        return flask.abort(404, "Note not found")
-    
-    form = forms.NoteForm(obj=note)  # Pre-fill the form with existing note data
+        return "Note not found", 404
 
-    if form.validate_on_submit():  # This checks if the method is POST
-        form.populate_obj(note)  # Update the note object
-        note.updated_date = func.now()  # Update the updated_date to now
-        db.session.commit()  # Commit changes
-        return flask.redirect(flask.url_for("index"))  # Redirect after successful update
+    # Initialize the form and set note object
+    form = forms.NoteForm()
 
-    return flask.render_template("notes-edit.html", form=form, note=note)  # Show form for editing
+    if form.validate_on_submit():
+        # Update note data if the form is valid
+        note.title = form.title.data
+        note.description = form.description.data
+        note.tags = []  # Clear current tags
 
-####################
+        for tag_name in form.tags.data:
+            if isinstance(tag_name, str) and tag_name.strip():
+                # Check if tag exists, otherwise create a new one
+                tag = db.session.execute(
+                    db.select(models.Tag).where(models.Tag.name == tag_name)
+                ).scalars().first()
+
+                if not tag:
+                    tag = models.Tag(name=tag_name)
+                    db.session.add(tag)
+
+                note.tags.append(tag)  # Add the tag to the note
+
+        db.session.commit()  # Commit changes to the database
+        return flask.redirect(flask.url_for("index"))
+
+    # Populate form with existing data on GET request
+    if flask.request.method == "GET":
+        form.title.data = note.title
+        form.description.data = note.description
+        form.tags.data = [tag.name for tag in note.tags]  # Populate tags with names
+
+    # Render the edit template with the form and note
+    return flask.render_template("notes-edit.html", form=form, note=note)
+
+###################
 
 if __name__ == "__main__":
     app.run(debug=True)
