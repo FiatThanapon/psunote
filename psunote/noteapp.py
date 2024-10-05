@@ -140,6 +140,5 @@ def notes_delete(note_id):
     return flask.redirect(flask.url_for("index"))
 ###################
 
-
 if __name__ == "__main__":
     app.run(debug=True)
